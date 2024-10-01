@@ -129,6 +129,23 @@ API 자원이 한번 생성되면 시스템은 그 자원의 존재를 보장하
 
 - `proxy` , `portforward`
 
+### Object 의 Metadata
+
+nested 필드인 "metadata" 안에 다음의 항목들이 필수이다.
+
+- `namespace` : DNS compatible label
+- `name` : 개개의 오브젝트에 접근할 때 경로로 사용됨. 현재 namespace에서 유일해야 한다.
+- `uid` : 같은 name을 가진 오브젝트 사이에서도 구분하기 위해 필요
+
+다음의 항목들은 선택이다.
+
+- `resourceVersion` : 오브젝트의 수정날짜를 유추할 수 있는 버전 정보. 클라이언트가 관찰할 수 있지만, 수정해서는 안된다. 그대로 서버에 다시 돌려줘야 함.
+- `generation` : 특정 상태가 생성된 sequence number를 나타냄. 시스템에 의해 부여되어 자동으로 증가함.
+- `creationTimestamp` : 오브젝트가 생성된 날짜와 시간
+- `deletionTimestamp` : 오브젝트가 삭제될 날짜와 시간, 유저가 정상적으로 삭제를 요청했을 때 서버에 의해 부여된다. 오브젝트가 finalizer가 설정되지 않았다면 해당 시간 후에 오브젝트가 삭제된다. finalizer 가 설정되어 있다면 최소한 그게 없어질 때까지 삭제가 보류된다.
+- `labels` : 오브젝트를 조직하고 범주화하기 위해 쓰일 수 있는 key, value
+- `annotations` : 해당 오브젝트에 대한 임의의 메타데이터를 저장하거나 복원하기 위해 쓰일 수 있는 key, value
+
 ## bindings
 
 ```html
@@ -161,3 +178,19 @@ the bindings subresource of pods instead. FIELDS: apiVersion
 ```
 
 오브젝트들끼리 연결해주는 역할을 한다. 대표적인 예로, 파드를 노드에 바인딩한다. 이는 스케쥴러에 의해 자동으로 실행되기 때문에 사용자는 이 자원을 직접 사용하는 경우가 드물다.
+
+## ComponentStatus
+
+클러스터의 유효성검증 정보를 담는다.
+
+[stackoverflow](https://stackoverflow.com/questions/73407661/componentstatus-is-deprecated-what-to-use-then)
+
+v1.19 부터 deprecated.
+
+위의 stackoverflow에서 벌이는 논쟁은
+
+`kubectl get --raw='/readyz?verbose'` 혹은 로컬 환경에서 `curl -k https://localhost:6443/livez?verbose` 로 `etcd, kube-scheduler, and kube-controller-manager`의 상태를 확인할 수 있다는 말인데,
+
+원래 Kubernetes API server의 경우 `healthz`, `livez`, `readyz` 의 세 API로 현재 상태를 나타냈는데, `healthz` 도 v1.16 부터 deprecated 여서 `livez`, `readyz` 를 사용해야 한다는 것이다.
+
+반면에 댓글은 해당 API 들이 정상으로 나와도 componentstatuses 는 문제를 띠고 있을 수 있고, 실제로 문제가 있었다고 주장하고 있다.
