@@ -194,3 +194,108 @@ v1.19 부터 deprecated.
 원래 Kubernetes API server의 경우 `healthz`, `livez`, `readyz` 의 세 API로 현재 상태를 나타냈는데, `healthz` 도 v1.16 부터 deprecated 여서 `livez`, `readyz` 를 사용해야 한다는 것이다.
 
 반면에 댓글은 해당 API 들이 정상으로 나와도 componentstatuses 는 문제를 띠고 있을 수 있고, 실제로 문제가 있었다고 주장하고 있다.
+
+## ConfigMaps
+
+기밀(은 configmap 말고 Secret으로)이 아닌 데이터를 키-밸류 쌍으로 저장하기 위한 API 오브젝트이다.
+
+파드들은 이를 환경변수처럼, command-line 인자로, 볼륨의 config 파일로 쓸 수 있다.
+
+컨테이너 이미지가 환경 종속적인 config와의 연결이 느슨해지게 해서 어플리케이션의 이동성이 좋아진다.
+
+### 동기
+
+앱과 그 config 파일을 분리하자. 예를 들어, `DATABASE_HOST` 변수를 클라우드 상에서는 kuberenetes service로, 로컬에서는 `localhost`로 설정할 수 있을 것이다.
+
+### ConfigMap Object
+
+다른 kubernetes 오브젝트들과 달리 ConfigMap은 `spec` 이 아닌, `data`(UTF-8)와 `binaryData`(base64-encoded string) 필드를 가진다. 두 필드 모두 key-value 쌍으로 구성된다. `key`는 모두 알파벳, 숫자, `-`, `_`, `.` 으로 이루어져야 한다.
+
+### ConfigMaps and Pods
+
+Pod의 `spec`을 같은 namespace 안에 있는 ConfigMap을 참조하도록 작성할 수 있다.
+
+- 작성예시
+
+```yml
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: game-demo
+data:
+  # property-like keys; each key maps to a simple value
+  player_initial_lives: "3"
+  ui_properties_file_name: "user-interface.properties"
+
+  # file-like keys
+  game.properties: |
+    enemy.types=aliens,monsters
+    player.maximum-lives=5
+  user-interface.properties: |
+    color.good=purple
+    color.bad=yellow
+    allow.textmode=true
+```
+
+Pod 안의 컨테이너가 Configmap을 사용하는 4가지 방법이 있다.
+
+1. 컨테이너 커맨드 혹은 내부 인자로.
+2. 컨테이너 환경변수로.
+3. 읽기 전용 volume에 어플리케이션이 읽을 수 있도록 추가.
+4. **Write code to run inside the Pod that uses the Kubernetes API to read a ConfigMap**
+
+마지막 방법의 특별한 점은 ConfigMap과 그 데이터를 읽기 위해 코드를 따로 작성해야 한다는 점이다. 때문에 ConfigMap이 변화할 때마다 그에 맞는 반응을 분기로 작성하는 등의 방식이 가능하다. API를 직접 호출하기 때문에 다른 namespace의 ConfigMap에도 접근이 가능하다는 점이 큰 장점이다.
+
+- 작성예시
+
+```yml
+apiVersion: v1
+kind: Pod
+metadata:
+  name: configmap-demo-pod
+spec:
+  containers:
+    - name: demo
+      image: alpine
+      command: ["sleep", "3600"]
+      env:
+        # Define the environment variable
+        - name: PLAYER_INITIAL_LIVES # Notice that the case is different here
+          # from the key name in the ConfigMap.
+          valueFrom:
+            configMapKeyRef:
+              name: game-demo # The ConfigMap this value comes from.
+              key: player_initial_lives # The key to fetch.
+        - name: UI_PROPERTIES_FILE_NAME
+          valueFrom:
+            configMapKeyRef:
+              name: game-demo
+              key: ui_properties_file_name
+      volumeMounts:
+        - name: config
+          mountPath: "/config"
+          readOnly: true
+  volumes:
+    # You set volumes at the Pod level, then mount them into containers inside that Pod
+    - name: config
+      configMap:
+        # Provide the name of the ConfigMap you want to mount.
+        name: game-demo
+        # An array of keys from the ConfigMap to create as files
+        items:
+          - key: "game.properties"
+            path: "game.properties"
+          - key: "user-interface.properties"
+            path: "user-interface.properties"
+```
+
+단일 줄로 작성하든, 여러 줄에 걸쳐 file-like 값으로 작성하든 상관없다. 그저 어떻게 다른 오브젝트가 그 값들을 사용하는지에 달려있다.
+
+위의 예제에서 `demo` 컨테이너에 volum을 정의하고 이를 /config 로서 마운트 한 것은 두 개의 파일을 생성한다.
+
+1. /config/game.properties
+2. /config/user-interface.properties
+
+키는 정확히 4개로 보이지만, `items` 를 이용해 배열로 묶었기 때문에 두 개만 생성된다. `items`를 생략하면 생각하는 대로 네 개의 파일을 얻을 수 있다.
+
+### Using ConfigMaps
