@@ -66,10 +66,34 @@ spec:
 
 ### Service Type
 
+이전 단계의 type 이 다음 단계 type의 기반이 되는 nested 기능 방식으로 구현되었다. 결국 ClusterIP 가 모든 것의 기본이 된다.
+
 #### ClusterIP
+
+클러스터 내부 IP로 서비스를 노출한다. 다시 말해, 클러스터 내부에서만 접근 가능하게 한다. `type` 영역을 지정해 주지 않으면 default 값은 ClusterIP로 지정된다. [Ingress](https://kubernetes.io/docs/concepts/services-networking/ingress/) 나 [Gateway](https://gateway-api.sigs.k8s.io/)를 통해 외부에 노출할 수 있다.
+
+클러스터가 미리 예약해 놓은 IP 주소들 중에서 할당해주는데, 직접 지정할 수도 있다. 이때, `.spec.clusterIP` 필드에 적어주면 되는데, `service-cluster-ip-range` CIDR 범위 내에서 지정해주어야 한다. 서로 다른 서비스가 IP가 중복되는 등의 충돌이 발생하면 "422" 에러를 뱉어 알려줄 것이다.
 
 #### NodePort
 
+노드의 정적 Port (= `NodePort`)로 서비스를 노출한다. 이를 위해 클러스터의 IP 주소를 할당해준다. ClusterIP type과 유사하게 설정해준다고 한다.
+
+**모든 노드에** 30000 ~ 32767 사이의 포트를 연다. 사용자의 로드 밸런싱 솔루션을 자유롭게 적용해 볼 수 있다.
+
+- 양쪽 (내부 / 외부) 모두에서 접근이 가능하다는 점에 명심!
+
+> 마지막 말이 잘 이해가 안된다. 다 똑같은 포트를 열어 놓고 label selector로 지정된 앱을 찾아갈 텐데, 어떤 노드로 들어가는지 트래픽은 모르는 것이 아닌가? 각 노드마다 도달한 곳이 Nginx 같은 로드 밸런싱 app 이라는 뜻일까..? 잘 모르겠다.
+
 #### LoadBalancer
 
+외부 Load Balancer를 사용해 서비스를 외부로 노출한다. k8s가 직접적으로 로드 밸런싱 컴포넌트를 구성해 주는 것은 아니다! 개발자가 설정해주어야 한다.
+
+가장 일반적인 방법이다. 외부의 로드밸런서가 클러스터 내부의 로드밸런서 서비스를 만나 각 파드에 도달할 수 있게 되는.. 로드밸런서를 로드밸런싱 하는 방식으로 큰 그림을 그려볼 수 있겠다.
+
+> 이쯤되면 실습이 필수인 부분 같아서 답답하다.
+
 #### ExternalName
+
+`externalName` 필드의 내용으로서 서비스를 매핑한다. 클러스터의 DNS 서버가 CNAME 기록 (바로 그 external hostname 값으로.)을 리턴하도록 한다.(??)
+
+#### NodePort 와 LoadBalancer가 종합된 Ingress에 대해서도 다음에 공부해보자!
